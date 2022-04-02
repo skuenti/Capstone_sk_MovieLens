@@ -4,6 +4,9 @@
 
 # Note: this process could take a couple of minutes
 
+# Code copied from course, added my own solutions for the quiz
+# questions as well as the solutions provided in the answers.
+
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
