@@ -9,17 +9,36 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+In order to create a movie recommendation system, a machine learning algorithm had to 
+be trained on a part of the MovieLens dataset. The idea was to predict movie ratings 
+based on a set of features.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Here, in addition to the movie and user effects already modelled in the course, it was
+tested whether there was a genre effect, and if yes, this genre effect was added to the model
+in addition to the other two effects (movie and user) in order to improve predictions.
+
+The model achieving the lowest residual mean squared error (RMSE) after training 
+was then chosen and used to assess the final model 
+by means of an exclusive holdout set of the original data, which mimicked model performance
+on actual 'real-world' data.
+
+Maybe this will be an attempt at improving the model by including genre data
 
 ```{r cars}
 summary(cars)
 ```
 
-## Including Plots
+## Methods
+
+Data was split 80/20% into a training and test set in order to tune an algorithm.
+
+# Is there a genere effect?
+If yes, I which could rely on to refine predictions.
+
+It tunr out that genre data is difficult, because each movie is associated to multiple
+genres.
 
 You can also embed plots, for example:
 
@@ -28,3 +47,12 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+RMSE is defined as follows: 
+
+RMSE = sqrt(1/N*sum((y_hat_u_i-y_u_i)^2)
+
+## Results
+
+
+## Conclusion

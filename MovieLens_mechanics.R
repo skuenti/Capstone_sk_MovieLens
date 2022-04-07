@@ -1,1 +1,97 @@
-# The prediction algorithms...
+# ===== Preparation of data ======
+
+
+# Create edx set, validation set (final hold-out test set)
+
+# Note: this process could take a couple of minutes
+
+# Code copied from course (whole solution needs to be in a single R file)
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(caret)
+library(data.table)
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+
+# if using R 3.6 or earlier:
+# movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
+#                                            title = as.character(title),
+#                                            genres = as.character(genres))
+
+# if using R 4.0 or later:
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+validation <- temp %>% 
+    semi_join(edx, by = "movieId") %>%
+    semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+# ==== Create a train/test set from edx ======
+
+# Train set will be 80% of edx data, 20% set aside for testing (code as above)
+set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
+test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.2, list = FALSE)
+edx_train <- edx[-test_index,]
+edx_test <- edx[test_index,]
+rm(test_index)
+
+
+# ===== Establish genre effect ====== 
+# (main task, my addition to model)
+
+
+# is there a genere effect, which I could rely on to refine predictions?
+# genre data is difficult, because each movie is associated to multiple
+# genres
+
+# I could average after filtering for each genre (each movie would affect
+# all genres it is associated to, so some movies will influence several
+# genres)
+
+
+# ==== RMSE =====
+# loss function to assess and compare models
+# based on RMSE = root mean squared error
+RMSE <- function(true_ratings, predicted_ratings){
+    sqrt(mean((true_ratings - predicted_ratings)^2))
+}
+
+# ==== Determine regularised movie effect (as in course example) =====
+
+
+
+# ==== Determine regularised user effect (as in course example) =====
+
+tabellenresultat %>% knitr::kable()
