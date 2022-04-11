@@ -2,10 +2,9 @@
 
 
 # Create edx set, validation set (final hold-out test set)
+# Code copied from course (whole solution needs to be in a single R file)
 
 # Note: this process could take a couple of minutes
-
-# Code copied from course (whole solution needs to be in a single R file)
 
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
@@ -14,6 +13,8 @@ if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.
 library(tidyverse)
 library(caret)
 library(data.table)
+library(ggplot2)
+library(dplyr)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
@@ -60,26 +61,12 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
 # ==== Create a train/test set from edx ======
 
-# Train set will be 80% of edx data, 20% set aside for testing (code as above)
+# Train set will be 90% of edx data, 10% set aside for testing (code as above)
 set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
-test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.2, list = FALSE)
+test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.1, list = FALSE)
 edx_train <- edx[-test_index,]
 edx_test <- edx[test_index,]
 rm(test_index)
-
-
-# ===== Establish genre effect ====== 
-# (main task, my addition to model)
-
-
-# is there a genere effect, which I could rely on to refine predictions?
-# genre data is difficult, because each movie is associated to multiple
-# genres
-
-# I could average after filtering for each genre (each movie would affect
-# all genres it is associated to, so some movies will influence several
-# genres)
-
 
 # ==== RMSE =====
 # loss function to assess and compare models
@@ -88,10 +75,91 @@ RMSE <- function(true_ratings, predicted_ratings){
     sqrt(mean((true_ratings - predicted_ratings)^2))
 }
 
-# ==== Determine regularised movie effect (as in course example) =====
+
+# ==== Overall average rating =====
+
+mu_overall <- mean(edx_train$rating)
+
+# ==== Determine (regularised?) movie effect (as in course example) =====
+# add regularisation as a refinement
+
+movie_avg <- edx_train %>% group_by(movieId) %>%
+    summarise(b_movie = mean(rating - mu_overall))
+
+# is there an effect?
+movie_avg %>% ggplot(aes(b_movie)) + geom_histogram()
+
+# ==== Determine (regularised?) user effect (as in course example) =====
+# add regularisation as a refinement
+
+# here I need to consider the movie effects established above
+
+user_avg <- edx_train %>% 
+    left_join(movie_avg, by='movieId') %>%
+    group_by(userId) %>%
+    summarise(b_user = mean(rating - mu_overall- b_movie))
+
+# is there an effect?
+user_avg %>% ggplot(aes(b_user)) + geom_histogram()
+
+# ===== RSME with movie and user effects =====
+
+predicted_ratings <- edx_test %>%
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    mutate(pred = mu_overall + b_movie + b_user) %>%
+    pull(pred)
+sum(is.na(predicted_ratings))
+# for some reason, there are NAs
+# replace NA-predictions with mean
+predicted_ratings <- replace_na(predicted_ratings, mu_overall)
+
+RMSE(edx_test$rating, predicted_ratings)
+
+# ===== Establish genre effect ====== 
+# (main task, my addition to model)
+
+# treat genre combinations as factors (determining each genres' bias would be
+# too complicated)
+edx_train$genres <- as.factor(edx_train$genres)
+genre_avg <- edx_train %>% 
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    group_by(genres) %>%
+    summarise(b_genre = mean(rating - mu_overall- b_movie - b_user))
+
+# there seems to be a small effect of these genre combinations
+genre_avg %>% ggplot(aes(b_genre)) + geom_histogram()
+
+# ===== RSME with movie, user and genre effects =====
+
+predicted_ratings <- edx_test %>%
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    left_join(genre_avg, by = 'genres') %>%
+    mutate(pred = mu_overall + b_movie + b_user + b_genre) %>%
+    pull(pred)
+sum(is.na(predicted_ratings))
+# for some reason, there are NAs
+# replace NA-predictions with mean
+predicted_ratings <- replace_na(predicted_ratings, mu_overall)
+
+RMSE(edx_test$rating, predicted_ratings)
 
 
+# schöne Tabelle kann man so ausgeben:
+# tabellenresultat %>% knitr::kable()
 
-# ==== Determine regularised user effect (as in course example) =====
+# ==== Validate model with validation set ======
 
-tabellenresultat %>% knitr::kable()
+predicted_val_ratings <- validation %>%
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    left_join(genre_avg, by='genres') %>%
+    mutate(pred = mu_overall + b_movie + b_user + b_genre) %>%
+    pull(pred)
+sum(is.na(predicted_val_ratings))
+# again, replace those few NAs with the training mean
+predicted_val_ratings <- replace_na(predicted_val_ratings, mu_overall)
+
+RMSE(validation$rating, predicted_val_ratings)

@@ -1,38 +1,37 @@
 ---
 title: "Project Report MovieLens"
 author: "Samuel Kuenti"
-date: "2 4 2022"
-output: pdf_document
+date: "2. April 2022"
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ## Introduction
+*An introduction/overview/executive summary section that describes the data set and summarizes the goal of the project and key steps that were performed*
 
-In order to create a movie recommendation system, a machine learning algorithm had to 
-be trained on a part of the MovieLens dataset. The idea was to predict movie ratings 
-based on a set of features.
+The task for this first project of the Capstone module was to build a machine learning algorithm.  
+The idea was to predict movie ratings based on a set of features, with the model being trained on
+a large part of the data and then evaluated by means of a holdout set.
 
-Here, in addition to the movie and user effects already modelled in the course, it was
-tested whether there was a genre effect, and if yes, this genre effect was added to the model
-in addition to the other two effects (movie and user) in order to improve predictions.
+The data came from the publicly available MovieLens-databse. The data were split into a training set,
+a test set and the validation set. The latter was only used after the development of the model in order to assess its performance.
 
-The model achieving the lowest residual mean squared error (RMSE) after training 
-was then chosen and used to assess the final model 
-by means of an exclusive holdout set of the original data, which mimicked model performance
-on actual 'real-world' data.
+In the present solution, in addition to the movie and user effects already modeled in the 
+Machine Learning module, a small genre effect was established, which was used to refine the model.
 
-Maybe this will be an attempt at improving the model by including genre data
-
-```{r cars}
-summary(cars)
-```
+This refined model was assessed by means of the validation set of the original data, which mimicked model performance on actual 'real-world' data.
 
 ## Methods
+methods/analysis section that explains the process and techniques used, including data cleaning, data exploration and visualization, insights gained, and your modeling approach
 
-Data was split 80/20% into a training and test set in order to tune an algorithm.
+The modeling data were split 90/10% into a training and a test set. This splitting was chosen because the model's structure was clear from the beginning, and no tweaking was expected in response to model performance.
+
+The training set consisted of 'r edx_train %>% summarise(n=n())' cases.
+
+
 
 # Is there a genere effect?
 If yes, I which could rely on to refine predictions.
@@ -53,6 +52,7 @@ RMSE is defined as follows:
 RMSE = sqrt(1/N*sum((y_hat_u_i-y_u_i)^2)
 
 ## Results
-
+a results section that presents the modeling results and discusses the model performance
 
 ## Conclusion
+a conclusion section that gives a brief summary of the report,its limitations and future work
