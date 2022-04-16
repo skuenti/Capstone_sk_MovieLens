@@ -7,52 +7,378 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(tidyverse)
+library(knitr)
+library(caret)
+library(data.table)
+library(ggplot2)
+options(digits = 5)
 ```
+
+
+
 
 ## Introduction
-*An introduction/overview/executive summary section that describes the data set and summarizes the goal of the project and key steps that were performed*
 
-The task for this first project of the Capstone module was to build a machine learning algorithm.  
-The idea was to predict movie ratings based on a set of features, with the model being trained on
-a large part of the data and then evaluated by means of a holdout set.
+The task for this first project of the Capstone module was to predict movie ratings based on a machine learning algorithm. 
 
-The data came from the publicly available MovieLens-databse. The data were split into a training set,
-a test set and the validation set. The latter was only used after the development of the model in order to assess its performance.
+The data came from the publicly available MovieLens-databse. The data were split into a training set, a test set and the validation set. The latter was to be used only after the completion of the model in order to assess its performance (model performance was assessed by comparing RMSE values, as described below).
 
-In the present solution, in addition to the movie and user effects already modeled in the 
-Machine Learning module, a small genre effect was established, which was used to refine the model.
+Here, as a first step, the movie and user effects described in the course were modeled. Then, it was determined that there was a small genre effect in the data. This effect was then added to the model in order to improve the overall performance. 
 
-This refined model was assessed by means of the validation set of the original data, which mimicked model performance on actual 'real-world' data.
+Finally, this refined model was assessed by means of the validation set of the original data, which mimicked model performance on actual 'real-world' data.
 
 ## Methods
-methods/analysis section that explains the process and techniques used, including data cleaning, data exploration and visualization, insights gained, and your modeling approach
 
-The modeling data were split 90/10% into a training and a test set. This splitting was chosen because the model's structure was clear from the beginning, and no tweaking was expected in response to model performance.
+### Data preparation
 
-The training set consisted of 'r edx_train %>% summarise(n=n())' cases.
+The data were downloaded from the grouplens homepage (http://files.grouplens.org/datasets/movielens/ml-10m.zip).
+
+Then, 10% of the whole dataset were set aside as the final validation set, as per the module requirements. This holdout data was to be used to assess the final model and to allow objective comparison of this particular solution to other student's algorithms.
+
+```{r data download and preparation, echo=FALSE, include=FALSE}
+# ===== Preparation of data ======
 
 
+# Create edx set, validation set (final hold-out test set)
+# Code copied from course (whole solution needs to be in a single R file)
 
-# Is there a genere effect?
-If yes, I which could rely on to refine predictions.
+# Note: this process could take a couple of minutes
 
-It tunr out that genre data is difficult, because each movie is associated to multiple
-genres.
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
 
-You can also embed plots, for example:
+# library(tidyverse)
+library(caret)
+library(data.table)
+library(ggplot2)
+# library(dplyr)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+
+# if using R 3.6 or earlier:
+# movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
+#                                            title = as.character(title),
+#                                            genres = as.character(genres))
+
+# if using R 4.0 or later:
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+validation <- temp %>%
+    semi_join(edx, by = "movieId") %>%
+    semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
-RMSE is defined as follows: 
 
-RMSE = sqrt(1/N*sum((y_hat_u_i-y_u_i)^2)
+The modeling data was then split further into a training set (90%) and a test set (10%). This splitting was chosen because the model's structure was clear from the beginning, and no tweaking was expected in response to model performance. Therefore, it was appropriate to have most of the data for the tuning of the model.
+
+```{r training and test set for model tuning, echo=FALSE, include=FALSE}
+
+# ==== Create a train/test set from edx ======
+
+# Train set will be 90% of edx data, 10% set aside for testing (code as above)
+set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
+test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.1, list = FALSE)
+edx_train <- edx[-test_index,]
+edx_test <- edx[test_index,]
+rm(test_index)
+```
+
+
+The training set consisted of `r nrow(edx_train)` cases.
+
+Model performance had to be assessed by calculating the root mean squared error (RMSE), defined as follows: 
+
+$$ RMSE = \sqrt{\frac{1}{N}\cdot\sum (\hat{y} - y)^2} $$
+
+The lower the RMSE, the better the model's predictions.
+
+```{r RMSE function}
+# ==== RMSE =====
+# loss function to assess and compare models
+# based on RMSE = root mean squared error
+RMSE <- function(true_ratings, predicted_ratings){
+    sqrt(mean((true_ratings - predicted_ratings)^2))
+}
+```
+
+
+### Initial model from the course
+
+```{r overall mean}
+# ==== Overall average rating =====
+
+mu_overall <- mean(edx_train$rating)
+```
+
+
+Initially, a simple model from the course was recreated. This consisted of using the overall mean rating of all the movies as a starting point ($\mu$ =  `r mu_overall`). 
+
+Then, a movie bias 
+$$\hat b_{m} = \frac{1}{N}\cdot(y_{m}-\hat\mu)$$ 
+```{r movie bias}
+# ==== Determine (regularised?) movie effect (as in course example) =====
+# add regularisation as a refinement
+
+movie_avg <- edx_train %>% group_by(movieId) %>%
+    summarise(b_movie = mean(rating - mu_overall))
+```
+
+
+and a user bias 
+$$\hat b_{u} = \frac{1}{N}\cdot(y_{m,u}-\hat\mu-\hat b_{m})$$ 
+```{r user bias}
+# ==== Determine (regularised?) user effect (as in course example) =====
+# (maybe add regularisation as a refinement)
+# here I need to consider the movie effects established above
+
+user_avg <- edx_train %>% 
+    left_join(movie_avg, by='movieId') %>%
+    group_by(userId) %>%
+    summarise(b_user = mean(rating - mu_overall- b_movie))
+```
+
+were estimated, and the inital model looked as follows:
+
+
+$$\hat y_{m,u} = \hat{\mu} + \hat{b}_{m} + \hat{b}_{u} $$
+
+```{r initial model, echo=FALSE, include=FALSE}
+# ===== RSME with movie and user effects =====
+
+predicted_ratings_im <- edx_test %>%
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    mutate(pred = mu_overall + b_movie + b_user) %>%
+    pull(pred)
+sum(is.na(predicted_ratings_im))
+# for some reason, there are NAs
+# replace NA-predictions with mean
+predicted_ratings_im <- replace_na(predicted_ratings_im, mu_overall)
+
+
+```
+This initial model achieved an RMSE of `r RMSE(edx_test$rating, predicted_ratings_im)` on the training set.
+
+```{r performance initial model}
+options(digits=5)
+RMSE(edx_test$rating, predicted_ratings_im)
+```
+
+### Genre effect
+In the textbook, the idea of a genre effect was brought up (Chapter 33.8). The genre column in the data includes every genre applying to a movie. For simplicity's sake, every combination of genres was treated as a distinct level of the genre factor.
+
+A genre bias could then be defined as follows (with g indexing genre combinations): 
+$$\hat b_{g} = \frac{1}{N}\cdot(y_{m,u,g}-\hat\mu-\hat b_{m}-\hat b_{u})$$ 
+
+```{r examine genre effect, echo=FALSE}
+# ===== Establish genre effect ====== 
+# (main task, my addition to model)
+
+# treat genre combinations as factors (determining each genres' bias would be
+# too complicated)
+edx_train$genres <- as.factor(edx_train$genres)
+genre_avg <- edx_train %>% 
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    group_by(genres) %>%
+    summarise(b_genre = mean(rating - mu_overall- b_movie - b_user))
+
+```
+
+In the training set, there were `r nrow(genre_avg)` genre combinations.
+
+A histogram revealed small genre effect:
+```{r genre effect}
+# there seems to be a small effect of these genre combinations
+genre_avg %>% ggplot(aes(b_genre)) + geom_histogram(bins = 30) + ylab("n") + xlab("Genre bias")
+```
+
+Not surprisingly, looking at the standard deviations of the biases showed that the additional variation accounted for by the genre effect was rather small, and that therefore model performance could not be expected to improve much.
+
+```{r}
+sd_table <- data.frame (bias  = c("Movie", "User", "Genre"),
+                  SD = c(sd(movie_avg$b_movie), sd(user_avg$b_user), sd(genre_avg$b_genre))
+                  )
+knitr::kable(sd_table, caption = "SD for different biases")
+```
+
+Nevertheless, refining the initial model by this genre effect seems viable.
+
+```{r refined model, echo=FALSE, include=FALSE}
+# ===== RSME with movie, user and genre effects =====
+
+predicted_ratings_refmodel <- edx_test %>%
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    left_join(genre_avg, by = 'genres') %>%
+    mutate(pred = mu_overall + b_movie + b_user + b_genre) %>%
+    pull(pred)
+sum(is.na(predicted_ratings_refmodel))
+# if there were NAs...
+# replace NA-predictions with mean
+predicted_ratings_refmodel <- replace_na(predicted_ratings_refmodel, mu_overall)
+```
+
+### Assessment of the refined model
+
+The genre bias was added to the model:
+
+$$\hat y_{m,u,g} = \hat{\mu} + \hat{b}_{m} + \hat{b}_{u}+ \hat{b}_{g} $$
+
+The inclusion of the genre bias improved the model performance slightly to an RMSE of `r RMSE(edx_test$rating, predicted_ratings_refmodel)`.
+
+```{r performance refined model, echo=FALSE, include=FALSE}
+options(digits = 5)
+RMSE_first <- RMSE(edx_test$rating, predicted_ratings_refmodel)
+```
+
+It must be noted that the addition of the genre bias improved the model performance by a mere `r RMSE(edx_test$rating, predicted_ratings_im)/RMSE(edx_test$rating, predicted_ratings_refmodel)*100-100` percent.
+```{r percent improvement, echo=FALSE, include=FALSE}
+RMSE(edx_test$rating, predicted_ratings_im)/RMSE(edx_test$rating, predicted_ratings_refmodel)*100-100
+```
+
+### Adding regularisation of the bias terms
+
+From the above, it seemed clear that the model needed further refinement. One approach described in the course was regularisation, with the aim of penalising large estimates coming from small sample sizes.
+
+In order to achieve this, a tuning parameter $\lambda$ was cross-validated to minimise the total error term: 
+
+$$ \frac{1}{N}\cdot\sum_{m,u,g} (y_{u,i,g} - \mu - b_m - b_u - b_g)^2+\lambda(\sum_mb_m^2+\sum_ub_u^2+\sum_gb_g^2) $$
+```{r regularisation, echo=FALSE}
+ldas <- seq(0,10,0.25)
+lda_rmse <- sapply(ldas, function(lda){
+    b_movie_reg <- edx_train %>% group_by(movieId) %>%
+        summarise(b_movie_reg = sum(rating-mu_overall)/(n()+lda))
+    b_user_reg <- edx_train %>% 
+        left_join(b_movie_reg, by="movieId") %>%
+        group_by(userId) %>%
+        summarise(b_user_reg = sum(rating - mu_overall - b_movie_reg)/(n()+lda))
+    b_genre_reg <- edx_train %>%
+        left_join(b_user_reg, by="userId") %>%
+        left_join(b_movie_reg, by="movieId") %>%
+        group_by(genres) %>%
+        summarise(b_genre_reg = sum(rating - mu_overall-b_movie_reg-b_user_reg)/(n()+lda))
+    predicted_ratings <- edx_test %>%
+        left_join(b_movie_reg, by="movieId") %>%
+        left_join(b_user_reg, by="userId") %>%
+        left_join(b_genre_reg, by="genres") %>%
+        mutate(pred=mu_overall+b_movie_reg+b_user_reg+b_genre_reg) %>%
+        pull(pred)
+    predicted_ratings <- replace_na(predicted_ratings, mu_overall)
+    return(RMSE(predicted_ratings, edx_test$rating))
+})
+
+best_lambda <- ldas[which.min(lda_rmse)]
+
+```
+
+Plotting RMSEs for different $\lambda$ showed that this lead to an improvement of the model. The horizontal line in the plot shows the RMSE of the refined model, prior to regularisation.
+
+```{r tuning plot, echo=FALSE}
+data.frame(ldas, lda_rmse) %>% ggplot() + geom_point(aes(ldas, lda_rmse)) +
+                                                         xlab("Lambda") +
+    ylab("RMSE") +
+    geom_hline(aes(yintercept = RMSE_first))
+```
+
+A $\lambda$ of `r best_lambda` minimised the RMSE at `r min(lda_rmse)` and was therefore included in the final model.
+
+```{r final model}
+# ==== Building the final model  ======
+
+b_movie_reg <- edx_train %>% group_by(movieId) %>%
+        summarise(b_movie_reg = sum(rating-mu_overall)/(n()+best_lambda))
+    b_user_reg <- edx_train %>% 
+        left_join(b_movie_reg, by="movieId") %>%
+        group_by(userId) %>%
+        summarise(b_user_reg = sum(rating - mu_overall - b_movie_reg)/(n()+best_lambda))
+    b_genre_reg <- edx_train %>%
+        left_join(b_user_reg, by="userId") %>%
+        left_join(b_movie_reg, by="movieId") %>%
+        group_by(genres) %>%
+        summarise(b_genre_reg = sum(rating - mu_overall-b_movie_reg-b_user_reg)/(n()+best_lambda))
+```
+
 
 ## Results
-a results section that presents the modeling results and discusses the model performance
+
+The final validation set was used to assess model performance.
+
+```{r validation of the first model, echo=FALSE, include=FALSE}
+# ==== Validate model with validation set ======
+
+predicted_val_ratings <- validation %>%
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    left_join(genre_avg, by='genres') %>%
+    mutate(pred = mu_overall + b_movie + b_user + b_genre) %>%
+    pull(pred)
+sum(is.na(predicted_val_ratings))
+# again, replace those few NAs with the training mean
+predicted_val_ratings <- replace_na(predicted_val_ratings, mu_overall)
+
+firstRMSE <- RMSE(validation$rating, predicted_val_ratings)
+firstRMSE
+```
+
+The refined model achieved an RMSE of `r firstRMSE`, just reaching the 15 point range on the grading scale. 
+
+```{r validation of the final model, echo=FALSE, include=FALSE}
+predicted_val_ratings <- validation %>%
+    left_join(b_movie_reg, by='movieId') %>%
+    left_join(b_user_reg, by='userId') %>%
+    left_join(b_genre_reg, by='genres') %>%
+    mutate(pred = mu_overall + b_movie_reg + b_user_reg + b_genre_reg) %>%
+    pull(pred)
+sum(is.na(predicted_val_ratings))
+# again, replace those few NAs with the training mean
+predicted_val_ratings <- replace_na(predicted_val_ratings, mu_overall)
+finalRMSE <- RMSE(validation$rating, predicted_val_ratings)
+finalRMSE
+```
+
+The regularised model achieved an improved RMSE of `r finalRMSE` when used on the final validation set, just below the target RMSE of 0.86490 for the 25 point score.
+
 
 ## Conclusion
-a conclusion section that gives a brief summary of the report,its limitations and future work
+The task in this project was to develop an algorithm to predict movie ratings. Here, a simple initial model from the course was refined by the inclusion of a third error term, based on genre effects.
+
+The goal of improving the initial model by adding an additional bias term was achieved. However, the model initially improved just slightly, and it must be noted that the model improvement after the addition of the genre bias was so small that it could have been a random result.
+
+As a result, regularisation was implemented to refine the model. This led to a further improvement, with the final model reaching an RMSE below the threshold for the maximum model performance score.
+
+Training the model on 90% of the training data could have led to overfitting. In a further step, this could be evaluated and model performance could potentially be improved further.

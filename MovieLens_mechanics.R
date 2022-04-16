@@ -87,7 +87,7 @@ movie_avg <- edx_train %>% group_by(movieId) %>%
     summarise(b_movie = mean(rating - mu_overall))
 
 # is there an effect?
-movie_avg %>% ggplot(aes(b_movie)) + geom_histogram()
+# movie_avg %>% ggplot(aes(b_movie)) + geom_histogram()
 
 # ==== Determine (regularised?) user effect (as in course example) =====
 # add regularisation as a refinement
@@ -100,21 +100,21 @@ user_avg <- edx_train %>%
     summarise(b_user = mean(rating - mu_overall- b_movie))
 
 # is there an effect?
-user_avg %>% ggplot(aes(b_user)) + geom_histogram()
+# user_avg %>% ggplot(aes(b_user)) + geom_histogram()
 
 # ===== RSME with movie and user effects =====
 
-predicted_ratings <- edx_test %>%
-    left_join(movie_avg, by='movieId') %>%
-    left_join(user_avg, by='userId') %>%
-    mutate(pred = mu_overall + b_movie + b_user) %>%
-    pull(pred)
-sum(is.na(predicted_ratings))
-# for some reason, there are NAs
-# replace NA-predictions with mean
-predicted_ratings <- replace_na(predicted_ratings, mu_overall)
-
-RMSE(edx_test$rating, predicted_ratings)
+# predicted_ratings <- edx_test %>%
+#     left_join(movie_avg, by='movieId') %>%
+#     left_join(user_avg, by='userId') %>%
+#     mutate(pred = mu_overall + b_movie + b_user) %>%
+#     pull(pred)
+# sum(is.na(predicted_ratings))
+# # for some reason, there are NAs
+# # replace NA-predictions with mean
+# predicted_ratings <- replace_na(predicted_ratings, mu_overall)
+# 
+# RMSE(edx_test$rating, predicted_ratings)
 
 # ===== Establish genre effect ====== 
 # (main task, my addition to model)
