@@ -1,8 +1,8 @@
 ---
 title: "Project Report MovieLens"
 author: "Samuel Kuenti"
-date: "2. April 2022"
-output: html_document
+date: "17. April 2022"
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -150,8 +150,8 @@ Initially, a simple model from the course was recreated. This consisted of using
 Then, a movie bias 
 $$\hat b_{m} = \frac{1}{N}\cdot(y_{m}-\hat\mu)$$ 
 ```{r movie bias}
-# ==== Determine (regularised?) movie effect (as in course example) =====
-# add regularisation as a refinement
+# ==== Determine movie effect (as in course example) =====
+# 
 
 movie_avg <- edx_train %>% group_by(movieId) %>%
     summarise(b_movie = mean(rating - mu_overall))
@@ -161,8 +161,8 @@ movie_avg <- edx_train %>% group_by(movieId) %>%
 and a user bias 
 $$\hat b_{u} = \frac{1}{N}\cdot(y_{m,u}-\hat\mu-\hat b_{m})$$ 
 ```{r user bias}
-# ==== Determine (regularised?) user effect (as in course example) =====
-# (maybe add regularisation as a refinement)
+# ==== Determine user effect (as in course example) =====
+# 
 # here I need to consider the movie effects established above
 
 user_avg <- edx_train %>% 
@@ -193,7 +193,7 @@ predicted_ratings_im <- replace_na(predicted_ratings_im, mu_overall)
 ```
 This initial model achieved an RMSE of `r RMSE(edx_test$rating, predicted_ratings_im)` on the training set.
 
-```{r performance initial model}
+```{r performance initial model, echo=FALSE, include=FALSE}
 options(digits=5)
 RMSE(edx_test$rating, predicted_ratings_im)
 ```
@@ -221,7 +221,9 @@ genre_avg <- edx_train %>%
 
 In the training set, there were `r nrow(genre_avg)` genre combinations.
 
-A histogram revealed small genre effect:
+A histogram revealed small genre effect:  
+
+
 ```{r genre effect}
 # there seems to be a small effect of these genre combinations
 genre_avg %>% ggplot(aes(b_genre)) + geom_histogram(bins = 30) + ylab("n") + xlab("Genre bias")
@@ -381,4 +383,4 @@ The goal of improving the initial model by adding an additional bias term was ac
 
 As a result, regularisation was implemented to refine the model. This led to a further improvement, with the final model reaching an RMSE below the threshold for the maximum model performance score.
 
-Training the model on 90% of the training data could have led to overfitting. In a further step, this could be evaluated and model performance could potentially be improved further.
+Training the model on 90% of the training data could have led to overfitting. As a next step, the issue of overfitting could be investigated and model performance could potentially be improved further as a result.

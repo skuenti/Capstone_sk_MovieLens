@@ -10,11 +10,11 @@ if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
 
-library(tidyverse)
+# library(tidyverse)
 library(caret)
 library(data.table)
 library(ggplot2)
-library(dplyr)
+# library(dplyr)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
@@ -49,7 +49,7 @@ edx <- movielens[-test_index,]
 temp <- movielens[test_index,]
 
 # Make sure userId and movieId in validation set are also in edx set
-validation <- temp %>% 
+validation <- temp %>%
     semi_join(edx, by = "movieId") %>%
     semi_join(edx, by = "userId")
 
@@ -80,17 +80,15 @@ RMSE <- function(true_ratings, predicted_ratings){
 
 mu_overall <- mean(edx_train$rating)
 
-# ==== Determine (regularised?) movie effect (as in course example) =====
-# add regularisation as a refinement
+# ==== Determine movie effect (as in course example) =====
+# 
 
 movie_avg <- edx_train %>% group_by(movieId) %>%
     summarise(b_movie = mean(rating - mu_overall))
 
-# is there an effect?
-# movie_avg %>% ggplot(aes(b_movie)) + geom_histogram()
 
-# ==== Determine (regularised?) user effect (as in course example) =====
-# add regularisation as a refinement
+# ==== Determine user effect (as in course example) =====
+# 
 
 # here I need to consider the movie effects established above
 
@@ -99,22 +97,23 @@ user_avg <- edx_train %>%
     group_by(userId) %>%
     summarise(b_user = mean(rating - mu_overall- b_movie))
 
-# is there an effect?
-# user_avg %>% ggplot(aes(b_user)) + geom_histogram()
-
 # ===== RSME with movie and user effects =====
 
-# predicted_ratings <- edx_test %>%
-#     left_join(movie_avg, by='movieId') %>%
-#     left_join(user_avg, by='userId') %>%
-#     mutate(pred = mu_overall + b_movie + b_user) %>%
-#     pull(pred)
-# sum(is.na(predicted_ratings))
-# # for some reason, there are NAs
-# # replace NA-predictions with mean
-# predicted_ratings <- replace_na(predicted_ratings, mu_overall)
-# 
-# RMSE(edx_test$rating, predicted_ratings)
+predicted_ratings_im <- edx_test %>%
+    left_join(movie_avg, by='movieId') %>%
+    left_join(user_avg, by='userId') %>%
+    mutate(pred = mu_overall + b_movie + b_user) %>%
+    pull(pred)
+sum(is.na(predicted_ratings_im))
+# for some reason, there are NAs...
+# replace NA-predictions with mean
+predicted_ratings_im <- replace_na(predicted_ratings_im, mu_overall)
+
+# ==== Performance of initial model =====
+
+options(digits=5)
+RMSE(edx_test$rating, predicted_ratings_im)
+
 
 # ===== Establish genre effect ====== 
 # (main task, my addition to model)
@@ -129,28 +128,83 @@ genre_avg <- edx_train %>%
     summarise(b_genre = mean(rating - mu_overall- b_movie - b_user))
 
 # there seems to be a small effect of these genre combinations
-genre_avg %>% ggplot(aes(b_genre)) + geom_histogram()
+genre_avg %>% ggplot(aes(b_genre)) + geom_histogram(bins = 30) + ylab("n") + xlab("Genre bias")
+
+# genre effect is relatively small...
+sd_table <- data.frame (bias  = c("Movie", "User", "Genre"),
+                        SD = c(sd(movie_avg$b_movie), sd(user_avg$b_user), sd(genre_avg$b_genre))
+)
+knitr::kable(sd_table, caption = "SD for different biases")
 
 # ===== RSME with movie, user and genre effects =====
 
-predicted_ratings <- edx_test %>%
+predicted_ratings_refmodel <- edx_test %>%
     left_join(movie_avg, by='movieId') %>%
     left_join(user_avg, by='userId') %>%
     left_join(genre_avg, by = 'genres') %>%
     mutate(pred = mu_overall + b_movie + b_user + b_genre) %>%
     pull(pred)
-sum(is.na(predicted_ratings))
-# for some reason, there are NAs
+sum(is.na(predicted_ratings_refmodel))
+# if there were NAs...
 # replace NA-predictions with mean
-predicted_ratings <- replace_na(predicted_ratings, mu_overall)
+predicted_ratings_refmodel <- replace_na(predicted_ratings_refmodel, mu_overall)
 
-RMSE(edx_test$rating, predicted_ratings)
+# ==== Performance of refined model with movie/user/genre effect
 
+options(digits = 5)
+RMSE_first <- RMSE(edx_test$rating, predicted_ratings_refmodel)
 
-# schöne Tabelle kann man so ausgeben:
-# tabellenresultat %>% knitr::kable()
+# improvement over just movie/user-model (in percent)
+RMSE(edx_test$rating, predicted_ratings_im)/RMSE(edx_test$rating, predicted_ratings_refmodel)*100-100
 
-# ==== Validate model with validation set ======
+# ==== Add regularisation and cross validate lambda
+
+ldas <- seq(0,10,0.25)
+lda_rmse <- sapply(ldas, function(lda){
+    b_movie_reg <- edx_train %>% group_by(movieId) %>%
+        summarise(b_movie_reg = sum(rating-mu_overall)/(n()+lda))
+    b_user_reg <- edx_train %>% 
+        left_join(b_movie_reg, by="movieId") %>%
+        group_by(userId) %>%
+        summarise(b_user_reg = sum(rating - mu_overall - b_movie_reg)/(n()+lda))
+    b_genre_reg <- edx_train %>%
+        left_join(b_user_reg, by="userId") %>%
+        left_join(b_movie_reg, by="movieId") %>%
+        group_by(genres) %>%
+        summarise(b_genre_reg = sum(rating - mu_overall-b_movie_reg-b_user_reg)/(n()+lda))
+    predicted_ratings <- edx_test %>%
+        left_join(b_movie_reg, by="movieId") %>%
+        left_join(b_user_reg, by="userId") %>%
+        left_join(b_genre_reg, by="genres") %>%
+        mutate(pred=mu_overall+b_movie_reg+b_user_reg+b_genre_reg) %>%
+        pull(pred)
+    predicted_ratings <- replace_na(predicted_ratings, mu_overall)
+    return(RMSE(predicted_ratings, edx_test$rating))
+})
+
+best_lambda <- ldas[which.min(lda_rmse)]
+
+# plot lambda vs. rmse to show improvement of model
+data.frame(ldas, lda_rmse) %>% ggplot() + geom_point(aes(ldas, lda_rmse)) +
+    xlab("Lambda") +
+    ylab("RMSE") +
+    geom_hline(aes(yintercept = RMSE_first))
+
+# ==== Building the final model with optimum lambda
+
+b_movie_reg <- edx_train %>% group_by(movieId) %>%
+    summarise(b_movie_reg = sum(rating-mu_overall)/(n()+best_lambda))
+b_user_reg <- edx_train %>% 
+    left_join(b_movie_reg, by="movieId") %>%
+    group_by(userId) %>%
+    summarise(b_user_reg = sum(rating - mu_overall - b_movie_reg)/(n()+best_lambda))
+b_genre_reg <- edx_train %>%
+    left_join(b_user_reg, by="userId") %>%
+    left_join(b_movie_reg, by="movieId") %>%
+    group_by(genres) %>%
+    summarise(b_genre_reg = sum(rating - mu_overall-b_movie_reg-b_user_reg)/(n()+best_lambda))
+
+# ==== Validate initial model with validation set ======
 
 predicted_val_ratings <- validation %>%
     left_join(movie_avg, by='movieId') %>%
@@ -162,4 +216,19 @@ sum(is.na(predicted_val_ratings))
 # again, replace those few NAs with the training mean
 predicted_val_ratings <- replace_na(predicted_val_ratings, mu_overall)
 
-RMSE(validation$rating, predicted_val_ratings)
+firstRMSE <- RMSE(validation$rating, predicted_val_ratings)
+firstRMSE
+
+# ==== Validate final model ====== 
+
+predicted_val_ratings <- validation %>%
+    left_join(b_movie_reg, by='movieId') %>%
+    left_join(b_user_reg, by='userId') %>%
+    left_join(b_genre_reg, by='genres') %>%
+    mutate(pred = mu_overall + b_movie_reg + b_user_reg + b_genre_reg) %>%
+    pull(pred)
+sum(is.na(predicted_val_ratings))
+# again, replace those few NAs with the training mean
+predicted_val_ratings <- replace_na(predicted_val_ratings, mu_overall)
+finalRMSE <- RMSE(validation$rating, predicted_val_ratings)
+finalRMSE
